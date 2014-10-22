@@ -53,53 +53,54 @@ def mpt1327_decode(bit, m):
 			m.cnt = 0
 
 	if m.codeword == 1:
-		if m.cnt == 64 and m.crc():
-			#print "Prev: %X" % (m.prev)
-			#print "CW1: %X, %X, %X, %X" % (m.data[0], m.data[1], m.data[2], m.data[3])
-			cat = (m.data[1] >> 7) & 0x7
-			type = (m.data[1] >> 5) & 0x3
-			func = (m.data[1] >> 2) & 0x7
+		if m.cnt == 64:
+			if m.crc():
+				#print "Prev: %X" % (m.prev)
+				#print "CW1: %X, %X, %X, %X" % (m.data[0], m.data[1], m.data[2], m.data[3])
+				cat = (m.data[1] >> 7) & 0x7
+				type = (m.data[1] >> 5) & 0x3
+				func = (m.data[1] >> 2) & 0x7
 
-			if cat == 0:
-				if type == 0:
-					pass
-					#sys.stdout.write('ALOHA ')
-					#print "ALOHA %d" % ((m.data[1] & 0x3) << 2 | (m.data[2] >> 14))
-				elif type == 1:
-					sys.stdout.write('ACK')
-					sys.stdout.write(acks[func])
-
-					prefix = (m.data[0] & 0x7F00) >> 8
-					ident1 = (m.data[0] << 5 | m.data[1] >> 11) & 0x1FFF
-
-					print ' Prefix: 0x%x Ident1: 0x%x' % (prefix, ident1)
-				elif type == 2:
-					if func == 1:
-						print "MAINT %d" % ((m.data[1] & 0x3) << 8 | (m.data[2] >> 8))
-					print 'REQ / AHOY'
-				elif type == 3:
-					#print 'MISC'
-					if func == 1:
-						print 'Call maintenance message - MAINT'
-					elif func == 3:
-						print 'Move to control channel - MOVE'
-					elif func == 4:
-						# TODO: MISC BCAST
-						#print "SYSDEF: %d" % ((m.data[0] & 0x7C00) >> 10)
+				if cat == 0:
+					if type == 0:
 						pass
-					else:
-						print "CAT: %d TYPE: %d FUNC: %d" % (cat, type, func)
-			elif cat == 1:
-				if type == 0:
-					print 'Single address message'
-				elif type == 1:
-					print 'Short data message'
-			else:
-				print "CAT: %d TYPE: %d FUNC: %d" % (cat, type, func)
-			
-			if m.data[1] & 1<<10 == 0:
-				channel_num = (m.data[1] << 1 | m.data[2] >> 15) & 0x3FF
-				print "GTC Channel %d - %.4fMHz (%s)" % (channel_num, m.base_freq + (channel_num * m.step_freq), 'data' if (m.data[1] & 0x200) else 'voice')
+						#sys.stdout.write('ALOHA ')
+						#print "ALOHA %d" % ((m.data[1] & 0x3) << 2 | (m.data[2] >> 14))
+					elif type == 1:
+						sys.stdout.write('ACK')
+						sys.stdout.write(acks[func])
+
+						prefix = (m.data[0] & 0x7F00) >> 8
+						ident1 = (m.data[0] << 5 | m.data[1] >> 11) & 0x1FFF
+
+						print ' Prefix: 0x%x Ident1: 0x%x' % (prefix, ident1)
+					elif type == 2:
+						if func == 1:
+							print "MAINT %d" % ((m.data[1] & 0x3) << 8 | (m.data[2] >> 8))
+						print 'REQ / AHOY'
+					elif type == 3:
+						#print 'MISC'
+						if func == 1:
+							print 'Call maintenance message - MAINT'
+						elif func == 3:
+							print 'Move to control channel - MOVE'
+						elif func == 4:
+							# TODO: MISC BCAST
+							#print "SYSDEF: %d" % ((m.data[0] & 0x7C00) >> 10)
+							pass
+						else:
+							print "CAT: %d TYPE: %d FUNC: %d" % (cat, type, func)
+				elif cat == 1:
+					if type == 0:
+						print 'Single address message'
+					elif type == 1:
+						print 'Short data message'
+				else:
+					print "CAT: %d TYPE: %d FUNC: %d" % (cat, type, func)
+
+				if m.data[1] & 1<<10 == 0:
+					channel_num = (m.data[1] << 1 | m.data[2] >> 15) & 0x3FF
+					print "GTC Channel %d - %.4fMHz (%s)" % (channel_num, m.base_freq + (channel_num * m.step_freq), 'data' if (m.data[1] & 0x200) else 'voice')
 
 			m.codeword = 0
 			m.cnt = 0
