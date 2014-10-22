@@ -1,7 +1,10 @@
 import sys, time
+from CrcMoose import CrcAlgorithm
 
 MPT_SYNC = 0xC4D7
 MPT_SYNT = 0x3B28
+
+CRC = CrcAlgorithm(15, 0x6815, xorMask=0x1)
 
 acks = [
 	' General',
@@ -23,6 +26,9 @@ class mpt1327_state:
 		self.base_freq = 170.8
 		self.step_freq = 0.0125
 
+	def crc(self):
+		return CRC.calcWord((self.data[0] << 32) | (self.data[1] << 16) | (self.data[2]), 48) == self.data[3] >> 1
+
 def shift(var, bit):
 	var = (var << 1) & 0xFFFF
 	if bit:
@@ -39,14 +45,15 @@ def mpt1327_decode(bit, m):
 	m.cnt += 1
 
 	if m.codeword == 0:
-		if m.data[3] == MPT_SYNC:
+		if m.data[3] == MPT_SYNC and m.crc():
 			#print "CW0: %X, %X, %X, %X" % (m.data[0], m.data[1], m.data[2], m.data[3])
+			#print "SYS: 0x%X" % (m.data[0] & 0x7FFF)
 			sys.stdout.flush()
 			m.codeword = 1
 			m.cnt = 0
 
 	if m.codeword == 1:
-		if m.cnt == 64: # 64 bit codeword plus skip the hangover bit
+		if m.cnt == 64 and m.crc():
 			#print "Prev: %X" % (m.prev)
 			#print "CW1: %X, %X, %X, %X" % (m.data[0], m.data[1], m.data[2], m.data[3])
 			cat = (m.data[1] >> 7) & 0x7
