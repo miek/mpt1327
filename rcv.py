@@ -78,6 +78,9 @@ def mpt1327_decode(bit, m):
 						#print 'MISC'
 						if func == 1:
 							print 'Call maintenance message - MAINT'
+						elif func == 2:
+							chan, cont = parameters.unpack('uint:10, uint:10')
+							print 'CLEAR Channel %d Go to control Channel %d' % (chan, cont)
 						elif func == 3:
 							print 'Move to control channel - MOVE'
 						elif func == 4:
