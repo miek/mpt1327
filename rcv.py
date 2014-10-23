@@ -1,4 +1,5 @@
 import sys, time
+from bitstring import BitArray
 from CrcMoose import CrcAlgorithm
 
 MPT_SYNC = 0xC4D7
@@ -19,7 +20,7 @@ acks = [
 
 class mpt1327_state:
 	def __init__(self):
-		self.data = [0, 0, 0, 0]
+		self.data = BitArray(uint=0, length=64)
 		self.cnt = 0
 		self.codeword = 0
 		self.prev = 0
@@ -27,27 +28,22 @@ class mpt1327_state:
 		self.step_freq = 0.0125
 
 	def crc(self):
-		return CRC.calcWord((self.data[0] << 32) | (self.data[1] << 16) | (self.data[2]), 48) == self.data[3] >> 1
-
-def shift(var, bit):
-	var = (var << 1) & 0xFFFF
-	if bit:
-		var += 1
-
-	return var
+		data, checksum = self.data.unpack('uint:48, uint:15')
+		return CRC.calcWord(data, 48) == checksum and self.data.count(1) % 2 == 0 # Even parity
 
 def mpt1327_decode(bit, m):
-	m.prev = shift(m.prev, m.data[0] & 0x8000 == 0x8000)
-	for i in range(3):
-		m.data[i] = shift(m.data[i], m.data[i+1] & 0x8000 == 0x8000)
+	m.data <<= 1
+	m.data[63] = bit
 
-	m.data[3] = shift(m.data[3], bit);
 	m.cnt += 1
 
+	address_codeword, information_field, parity = m.data.unpack('bool, bits:47, uint')
+
 	if m.codeword == 0:
-		if m.data[3] == MPT_SYNC and m.crc():
+		sysid, ccs, preamble = information_field.unpack('uint:15, uint:16, uint:16')
+		if parity == MPT_SYNC and m.crc():
 			#print "CW0: %X, %X, %X, %X" % (m.data[0], m.data[1], m.data[2], m.data[3])
-			#print "SYS: 0x%X" % (m.data[0] & 0x7FFF)
+			print "SYS: 0x%X" % sysid
 			sys.stdout.flush()
 			m.codeword = 1
 			m.cnt = 0
@@ -57,6 +53,7 @@ def mpt1327_decode(bit, m):
 			if m.crc():
 				#print "Prev: %X" % (m.prev)
 				#print "CW1: %X, %X, %X, %X" % (m.data[0], m.data[1], m.data[2], m.data[3])
+				parameters, general, cat, type, func, sub_parameters = information_field.unpack('bits:20, bool, uint:3, uint:2, uint:3, bits')
 				cat = (m.data[1] >> 7) & 0x7
 				type = (m.data[1] >> 5) & 0x3
 				func = (m.data[1] >> 2) & 0x7
@@ -65,18 +62,17 @@ def mpt1327_decode(bit, m):
 					if type == 0:
 						pass
 						#sys.stdout.write('ALOHA ')
-						#print "ALOHA %d" % ((m.data[1] & 0x3) << 2 | (m.data[2] >> 14))
+						print "ALOHA %d" % ((m.data[1] & 0x3) << 2 | (m.data[2] >> 14))
 					elif type == 1:
 						sys.stdout.write('ACK')
 						sys.stdout.write(acks[func])
 
-						prefix = (m.data[0] & 0x7F00) >> 8
-						ident1 = (m.data[0] << 5 | m.data[1] >> 11) & 0x1FFF
+						prefix, ident1 = parameters.unpack('uint:7, uint:13')
 
 						print ' Prefix: 0x%x Ident1: 0x%x' % (prefix, ident1)
 					elif type == 2:
 						if func == 1:
-							print "MAINT %d" % ((m.data[1] & 0x3) << 8 | (m.data[2] >> 8))
+							print "MAINT %d" % sub_parameters.unpack('uint')
 						print 'REQ / AHOY'
 					elif type == 3:
 						#print 'MISC'
@@ -98,9 +94,9 @@ def mpt1327_decode(bit, m):
 				else:
 					print "CAT: %d TYPE: %d FUNC: %d" % (cat, type, func)
 
-				if m.data[1] & 1<<10 == 0:
-					channel_num = (m.data[1] << 1 | m.data[2] >> 15) & 0x3FF
-					print "GTC Channel %d - %.4fMHz (%s)" % (channel_num, m.base_freq + (channel_num * m.step_freq), 'data' if (m.data[1] & 0x200) else 'voice')
+				if not general:
+					pfix, ident1, general, data, channel_num, ident2, aloha_num = information_field.unpack('uint:7, uint:13, bool, bool, uint:10, uint:13, uint:2')
+					print "GTC Channel %d - %.4fMHz (%s)" % (channel_num, m.base_freq + (channel_num * m.step_freq), 'data' if (data) else 'voice')
 
 			m.codeword = 0
 			m.cnt = 0
